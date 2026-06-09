@@ -158,4 +158,4 @@ def crear_dataloaders(imagenes, clases, idx_train, idx_val, idx_test,
                         num_workers=0, pin_memory=True)
     dl_test = DataLoader(ds_test, batch_size=batch, shuffle=False,
                          num_workers=0, pin_memory=True)
-    return dl_train, dl_val, dl_test
+    return dl_train, dl_val, dl_test    
