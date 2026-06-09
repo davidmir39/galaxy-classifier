@@ -1,0 +1,31 @@
+# === Entorno virtual ===
+.venv/
+venv/
+env/
+
+# === Datos y modelos (pesan demasiado para Git) ===
+data/
+models/
+*.h5            # dataset Galaxy10 DECaLS
+*.pt            # pesos de PyTorch
+*.pth           # pesos de PyTorch (formato alternativo)
+
+# === Caché de Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# === Jupyter ===
+.ipynb_checkpoints/
+
+# === Sistema operativo / editores ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# === Logs de entrenamiento ===
+logs/
+*.log
+runs/           # logs de TensorBoard, si lo usamos
