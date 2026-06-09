@@ -22,12 +22,14 @@ NOMBRES_CLASES = [
 MEDIA_IMAGENET = [0.485, 0.456, 0.406]
 STD_IMAGENET = [0.229, 0.224, 0.225]
 
-# Galaxy10 DECaLS alojado en Zenodo (~2,5 GB). SHA256 para verificar integridad.
+# El dataset no se versiona (pesa ~2,5 GB), así que lo bajamos de Zenodo la primera
+# vez. Guardamos el SHA256 oficial para confirmar que la descarga llegó completa.
 URL_DATASET = "https://zenodo.org/records/10845026/files/Galaxy10_DECals.h5?download=1"
 SHA256_DATASET = "19aefc477c41bb7f77ff07599a6b82a038dc042f889a111b0d4d98bb755c1571"
 
 
 def _sha256(ruta, bloque=1024 * 1024):
+    """SHA256 de un fichero leyéndolo a trozos (el .h5 no cabe entero en memoria)."""
     h = hashlib.sha256()
     with open(ruta, "rb") as f:
         for chunk in iter(lambda: f.read(bloque), b""):
@@ -36,36 +38,37 @@ def _sha256(ruta, bloque=1024 * 1024):
 
 
 def asegurar_dataset(ruta_h5, verificar=True):
-    """Descarga el .h5 desde Zenodo si no está en disco. Devuelve la ruta.
-
-    Descarga a un fichero temporal `.part` y solo lo renombra al terminar, para
-    no dejar un fichero corrupto si se interrumpe. Con `verificar=True` comprueba
-    el SHA256 y borra la descarga si no coincide.
-    """
+    """Descarga el .h5 de Zenodo la primera vez; si ya está en disco, no hace nada."""
     ruta = Path(ruta_h5)
     if ruta.exists():
         return str(ruta)
 
     ruta.parent.mkdir(parents=True, exist_ok=True)
+
+    # Bajamos a un .part y renombramos solo al final. Así, si se corta la descarga,
+    # no queda un .h5 incompleto que en la próxima ejecución parezca ya descargado.
     tmp = ruta.with_suffix(ruta.suffix + ".part")
     print(f"Dataset no encontrado. Descargando ~2,5 GB desde Zenodo a {ruta} ...")
     with urllib.request.urlopen(URL_DATASET) as resp:
         total = int(resp.headers.get("Content-Length", 0))
         with open(tmp, "wb") as f, tqdm(total=total, unit="B", unit_scale=True,
                                         desc="Galaxy10_DECals.h5") as barra:
+            # De 1 MB en 1 MB para no cargar los 2,5 GB de golpe en memoria.
             for chunk in iter(lambda: resp.read(1024 * 1024), b""):
                 f.write(chunk)
                 barra.update(len(chunk))
 
+    # Si el hash no cuadra el fichero está corrupto: lo borramos en vez de dejar
+    # un dataset a medias que rompería el entrenamiento más adelante sin avisar.
     if verificar:
-        print("Verificando SHA256 ...")
+        print("Verificando integridad (SHA256) ...")
         digest = _sha256(tmp)
         if digest != SHA256_DATASET:
             tmp.unlink()
             raise RuntimeError(
-                f"SHA256 no coincide (esperado {SHA256_DATASET}, obtenido {digest}). "
-                "Descarga abortada.")
-        print("Checksum OK.")
+                f"El SHA256 no coincide (esperado {SHA256_DATASET}, obtenido {digest}). "
+                "Se ha descartado la descarga; vuelve a intentarlo.")
+        print("Integridad verificada.")
 
     tmp.rename(ruta)
     return str(ruta)

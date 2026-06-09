@@ -34,6 +34,8 @@ def evaluar(modelo, cargador, dispositivo):
 def entrenar(modelo, dl_train, dl_val, criterio, dispositivo,
              epocas, lr, etiqueta="modelo", paciencia=5, usar_scheduler=True,
              ruta_modelos="../models"):
+    # models/ no se versiona, así que en un clon recién bajado no existe todavía;
+    # la creamos antes de empezar para no fallar al guardar el primer checkpoint.
     Path(ruta_modelos).mkdir(parents=True, exist_ok=True)
 
     # En transfer learning solo actualizamos capas con requires_grad=True.
