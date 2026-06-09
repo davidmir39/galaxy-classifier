@@ -1,11 +1,6 @@
-"""
-Módulo de ENTRENAMIENTO.
+# Bucle de entrenamiento, evaluación y pesos de clase para el desbalance.
 
-  - calcular_pesos: pesos de clase para mitigar el desbalance.
-  - evaluar: F1 macro y accuracy sobre un cargador (sin actualizar pesos).
-  - entrenar: bucle de entrenamiento con early stopping, scheduler de learning rate
-    y guardado del mejor modelo según F1 de validación.
-"""
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -14,7 +9,7 @@ from sklearn.utils.class_weight import compute_class_weight
 
 
 def calcular_pesos(clases, idx_train, dispositivo, num_clases=10):
-    """Pesos inversamente proporcionales a la frecuencia de cada clase en train."""
+    """Pesos inversos a la frecuencia de cada clase en train."""
     pesos = compute_class_weight("balanced", classes=np.arange(num_clases),
                                  y=clases[idx_train])
     return torch.tensor(pesos, dtype=torch.float32, device=dispositivo)
@@ -22,7 +17,7 @@ def calcular_pesos(clases, idx_train, dispositivo, num_clases=10):
 
 @torch.no_grad()
 def evaluar(modelo, cargador, dispositivo):
-    """Devuelve (f1_macro, accuracy, y_true, y_pred) sobre el cargador dado."""
+    """Calcula F1 macro y accuracy en un DataLoader (val o test)."""
     modelo.eval()
     y_true, y_pred = [], []
     for imgs, labs in cargador:
@@ -39,13 +34,11 @@ def evaluar(modelo, cargador, dispositivo):
 def entrenar(modelo, dl_train, dl_val, criterio, dispositivo,
              epocas, lr, etiqueta="modelo", paciencia=5, usar_scheduler=True,
              ruta_modelos="../models"):
-    """Entrena el modelo y guarda el mejor (por F1 de validación) en ruta_modelos.
+    # models/ no se versiona, así que en un clon recién bajado no existe todavía;
+    # la creamos antes de empezar para no fallar al guardar el primer checkpoint.
+    Path(ruta_modelos).mkdir(parents=True, exist_ok=True)
 
-    - Solo optimiza los parámetros entrenables (en Transfer Learning, la cabeza/capas
-      descongeladas).
-    - Scheduler ReduceLROnPlateau: baja el LR si el F1 de validación se estanca.
-    - Early stopping: corta si no mejora en 'paciencia' épocas.
-    """
+    # En transfer learning solo actualizamos capas con requires_grad=True.
     optim = torch.optim.Adam(
         [p for p in modelo.parameters() if p.requires_grad], lr=lr)
     scheduler = (torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -57,21 +50,23 @@ def entrenar(modelo, dl_train, dl_val, criterio, dispositivo,
         loss_acum = 0.0
         for imgs, labs in dl_train:
             imgs, labs = imgs.to(dispositivo), labs.to(dispositivo)
-            optim.zero_grad()                  # borrar gradientes previos
-            logits = modelo(imgs)              # forward
-            perdida = criterio(logits, labs)   # loss
-            perdida.backward()                 # backward
-            optim.step()                       # actualizar pesos
+            optim.zero_grad()
+            logits = modelo(imgs)
+            perdida = criterio(logits, labs)
+            perdida.backward()
+            optim.step()
             loss_acum += perdida.item()
 
         f1v, accv, _, _ = evaluar(modelo, dl_val, dispositivo)
         if scheduler is not None:
-            scheduler.step(f1v)
+            scheduler.step(f1v)  # bajamos LR si el F1 de val se estanca
+
         historial.append({"epoca": ep, "loss": loss_acum / len(dl_train),
                           "f1_val": f1v, "acc_val": accv})
         print(f"Época {ep:2d} | loss {loss_acum/len(dl_train):.3f} | "
               f"F1 val {f1v:.3f} | acc val {accv:.3f}")
 
+        # Guardamos el checkpoint con mejor F1 en validación (no el de la última época).
         if f1v > mejor_f1:
             mejor_f1 = f1v
             epocas_sin_mejora = 0
@@ -79,8 +74,7 @@ def entrenar(modelo, dl_train, dl_val, criterio, dispositivo,
         else:
             epocas_sin_mejora += 1
             if epocas_sin_mejora >= paciencia:
-                print(f"Early stopping en época {ep} "
-                      f"(sin mejora en {paciencia} épocas). Mejor F1: {mejor_f1:.3f}")
+                print(f"Early stopping en época {ep} (mejor F1: {mejor_f1:.3f})")
                 break
 
     return historial
