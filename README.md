@@ -8,7 +8,7 @@ Clasificamos imágenes del dataset Galaxy10 DECaLS en 10 tipos morfológicos. Pr
 2. ResNet50 con transfer learning (congelar → fine-tuning).
 3. EfficientNetB0 con el mismo esquema.
 
-**Mejor modelo:** ResNet50 con fine-tuning de `layer3` y `layer4` → F1 macro **0,784** y accuracy **0,801** en test.
+**Mejor modelo:** ResNet50 con fine-tuning de `layer3` y `layer4` → F1 macro **0,786** y accuracy **0,801** en test.
 
 ## Dataset
 
